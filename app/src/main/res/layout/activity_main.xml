@@ -36,7 +36,7 @@
 
     <LinearLayout
         android:id="@+id/linearLayout"
-        android:layout_width="wrap_content"
+        android:layout_width="140dp"
         android:layout_height="0dp"
         android:minWidth="100dp"
         android:orientation="vertical"
@@ -55,5 +55,31 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="awb: 0" />
+
+        <Button
+            android:id="@+id/ae_lock"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="ae lock: 0" />
+
+        <EditText
+            android:id="@+id/editTextTextPersonName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ems="10"
+            android:hint="Exp Comp"
+            android:inputType="numberDecimal"
+            android:minHeight="48dp" />
+
+        <Spinner
+            android:id="@+id/framesize_spinner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            tools:ignore="SpeakableTextPresentCheck" />
+
+        <Spinner
+            android:id="@+id/scene_mode_spinner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
     </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>

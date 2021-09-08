@@ -13,9 +13,13 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.Spinner;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -31,11 +35,14 @@ public class MainActivity extends AppCompatActivity {
 
     ImageView iv;
     Camera mCamera;
+    Camera.Parameters mCameraParameters;
     static final String TAG = "tag";
     CameraPreview mPreview;
     boolean awb = false;
     Thread cameraWorker;
     byte[] byteImage;
+    String framesize = "normal";
+    String sceneMode = "auto";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -44,7 +51,7 @@ public class MainActivity extends AppCompatActivity {
         iv = findViewById(R.id.imageView);
 
         startCamera();
-        setButtonListeners();
+        setView();
         //takePictureIntent();
     }
 
@@ -55,12 +62,12 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @SuppressLint("WrongConstant")
-    private void setButtonListeners() {
+    private void setView() {
         findViewById(R.id.awb_lock).setOnClickListener(view -> {
             awb = !awb;
             ((Button) view).setText("awb: " + (awb ? "1" : "0"));
             /* these datas are not using when surface changes */
-            mPreview.surfaceChanged(null, 0, 0, 0);
+            mPreview.surfaceChanged();
             /*Camera.Parameters parameters = mCamera.getParameters();
             parameters.setAutoWhiteBalanceLock(awb);
             parameters.setAutoExposureLock(awb);
@@ -71,6 +78,61 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.take_photo).setOnClickListener(view -> {
 
             mCamera.takePicture(null, null, mPicture);
+        });
+
+        Spinner framesizeSpinner = (Spinner) findViewById(R.id.framesize_spinner);
+        Spinner sceneModeSpinner = (Spinner) findViewById(R.id.scene_mode_spinner);
+        // Create an ArrayAdapter using the string array and a default spinner layout
+        ArrayAdapter<CharSequence> framesizeAdapter = ArrayAdapter.createFromResource(this,
+                R.array.framesizes, android.R.layout.simple_spinner_item);
+        List<String> sceneModes = mCameraParameters.getSupportedSceneModes();
+        ArrayAdapter<String> sceneModeAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, sceneModes);
+        // Specify the layout to use when the list of choices appears
+        framesizeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        sceneModeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        // Apply the adapter to the spinner
+        framesizeSpinner.setAdapter(framesizeAdapter);
+        sceneModeSpinner.setAdapter(sceneModeAdapter);
+
+        framesizeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
+                switch (i) {
+                    case 0:
+                        framesize = "low";
+                        break;
+                    case 1:
+                        framesize = "normal";
+                        break;
+                    case 2:
+                        framesize = "high";
+                        break;
+                    default:
+                        framesize = "normal";
+                }
+                startCamera();
+//                mPreview.surfaceChanged();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> adapterView) {
+                framesize = "normal";
+                mPreview.surfaceChanged();
+            }
+        });
+
+        sceneModeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
+                sceneMode = sceneModes.get(i);
+                mPreview.surfaceChanged();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> adapterView) {
+                sceneMode = "auto";
+                mPreview.surfaceChanged();
+            }
         });
     }
 
@@ -108,6 +170,7 @@ public class MainActivity extends AppCompatActivity {
                 mCamera.setDisplayOrientation(90);
                 mPreview = new CameraPreview(this, mCamera);
                 ((FrameLayout) findViewById(R.id.frameLayout)).addView(mPreview);
+                mCameraParameters = mCamera.getParameters();
             }
         }
     }
@@ -212,6 +275,10 @@ public class MainActivity extends AppCompatActivity {
             // empty. Take care of releasing the Camera preview in your activity.
         }
 
+        public void surfaceChanged() {
+            this.surfaceChanged(null, 0, 0, 0);
+        }
+
         public void surfaceChanged(SurfaceHolder holder, int format, int w, int h) {
             // If your preview can change or rotate, take care of those events here.
             // Make sure to stop the preview before resizing or reformatting it.
@@ -236,6 +303,7 @@ public class MainActivity extends AppCompatActivity {
                 Camera.Parameters parameters = mCamera.getParameters();
                 parameters.setPreviewSize(mPreviewSize.width, mPreviewSize.height);
                 parameters.setAutoWhiteBalanceLock(awb);
+                parameters.setSceneMode(sceneMode);
                 mCamera.setParameters(parameters);
                 mCamera.setPreviewDisplay(mHolder);
                 mCamera.startPreview();
@@ -247,10 +315,19 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-            final int width = resolveSize(getSuggestedMinimumWidth(), widthMeasureSpec);
-            final int height = resolveSize(getSuggestedMinimumHeight(), heightMeasureSpec);
+            int width = resolveSize(getSuggestedMinimumWidth(), widthMeasureSpec);
+            int height = resolveSize(getSuggestedMinimumHeight(), heightMeasureSpec);
             setMeasuredDimension(width, height);
-
+            switch (framesize) {
+                case "low":
+                    width = width / 2;
+                    height = height / 2;
+                    break;
+                case "normal":
+                    width = width * 2 / 3;
+                    height = height * 2 / 3;
+                    break;
+            }
             if (mSupportedPreviewSizes != null) {
                 mPreviewSize = getOptimalPreviewSize(mSupportedPreviewSizes, width, height);
             }
