@@ -66,7 +66,7 @@ public class MainActivity extends AppCompatActivity {
 
         findViewById(R.id.take_photo).setOnClickListener(view -> mCamera.takePicture(null, null, mPicture));
 
-        Spinner frameSizeSpinner = findViewById(R.id.framesize_spinner);
+        Spinner frameSizeSpinner = findViewById(R.id.frame_size_spinner);
         Spinner sceneModeSpinner = findViewById(R.id.scene_mode_spinner);
         // Create an ArrayAdapter using the string array and a default spinner layout
         ArrayAdapter<CharSequence> frameSizeAdapter = ArrayAdapter.createFromResource(this,
