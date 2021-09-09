@@ -10,7 +10,7 @@ import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
 import android.hardware.Camera;
 import android.os.Bundle;
-import android.os.Handler;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
@@ -41,7 +41,7 @@ public class MainActivity extends AppCompatActivity {
     CameraPreview mPreview;
     byte[] byteImage;
     int devicePosition = 0;
-    int[] fpsTracer = {0, 0};
+    static boolean isCropping = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -129,7 +129,8 @@ public class MainActivity extends AppCompatActivity {
         });
 
         findViewById(R.id.set_is_cropping).setOnClickListener(view -> {
-
+            isCropping = !isCropping;
+            ((Button) view).setText(isCropping ? "Crop" : "Don't Crop");
         });
 
         Spinner frameSizeSpinner = findViewById(R.id.frame_size_spinner);
@@ -239,8 +240,16 @@ public class MainActivity extends AppCompatActivity {
             }
             Matrix matrix = new Matrix();
             matrix.postRotate(degree);
-            Bitmap lastBm = Bitmap.createBitmap(b, 0, 0, b.getWidth(), b.getHeight(), matrix, true);
-
+            final Bitmap lastBm;
+            if (isCropping) {
+                DisplayMetrics displayMetrics = new DisplayMetrics();
+                getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
+                int width = (int) (b.getHeight() * getMorePercent(mPreview.getWidth(), displayMetrics.widthPixels));
+                int height = (int) (b.getWidth() * getMorePercent(mPreview.getHeight(), displayMetrics.heightPixels));
+                lastBm = Bitmap.createBitmap(b, 0, 0, width, height, matrix, true);
+            } else {
+                lastBm = Bitmap.createBitmap(b, 0, 0, b.getWidth(), b.getHeight(), matrix, true);
+            }
             runOnUiThread(() -> iv.setImageBitmap(Bitmap.createScaledBitmap(lastBm, iv.getWidth(), iv.getHeight(), false)));
 
             File pictureFile = getOutputMediaFile(MEDIA_TYPE_IMAGE);
@@ -258,5 +267,9 @@ public class MainActivity extends AppCompatActivity {
                 Log.d(TAG, "Error creating media file, check storage permissions");
             }
         }
+    }
+
+    private float getMorePercent(float prev, float disp) {
+        return ((prev / disp) * 100 + 1) / 100;
     }
 }
