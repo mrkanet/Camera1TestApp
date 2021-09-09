@@ -10,11 +10,13 @@ import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
 import android.hardware.Camera;
 import android.os.Bundle;
+import android.os.Handler;
 import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.Spinner;
@@ -34,10 +36,12 @@ public class MainActivity extends AppCompatActivity {
     ImageView iv;
     Camera mCamera;
     Camera.Parameters mCameraParameters;
+    Camera.CameraInfo info = new Camera.CameraInfo();
     static final String TAG = "tag";
     CameraPreview mPreview;
-    Thread cameraWorker;
     byte[] byteImage;
+    int devicePosition = 0;
+    int[] fpsTracer = {0, 0};
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -47,7 +51,6 @@ public class MainActivity extends AppCompatActivity {
 
         startCamera();
         setView();
-        //takePictureIntent();
     }
 
     @Override
@@ -59,12 +62,75 @@ public class MainActivity extends AppCompatActivity {
     @SuppressLint({"WrongConstant", "SetTextI18n"})
     private void setView() {
         findViewById(R.id.awb_lock).setOnClickListener(view -> {
-            mPreview.awb = !mPreview.awb;
-            ((Button) view).setText("awb: " + (mPreview.awb ? "1" : "0"));
+            mPreview.awbLock = !mPreview.awbLock;
+            ((Button) view).setText("awb: " + (mPreview.awbLock ? "1" : "0"));
             mPreview.surfaceChanged();
         });
 
         findViewById(R.id.take_photo).setOnClickListener(view -> mCamera.takePicture(null, null, mPicture));
+
+        findViewById(R.id.device_position).setOnClickListener(view -> {
+            Camera.getCameraInfo(devicePosition, info);
+            if (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+                devicePosition = 0;
+            } else {
+                devicePosition = 1;
+            }
+            mPreview.awbLock = false;
+            mPreview.aeLock = false;
+            mPreview.exposureCompensation = 0;
+            mPreview.setExposureCompensation = false;
+            startCamera();
+        });
+
+        findViewById(R.id.set_exposure).setOnClickListener(view -> {
+            try {
+                int expComp = Integer.parseInt(((EditText) findViewById(R.id.exp_comp)).getText().toString());
+                int minExp = mCameraParameters.getMaxExposureCompensation();
+                int maxExp = mCameraParameters.getMinExposureCompensation();
+                if (expComp >= minExp && expComp <= maxExp) {
+                    mPreview.exposureCompensation = expComp;
+                    mPreview.aeLock = false;
+                    mPreview.setExposureCompensation = true;
+                } else {
+                    Toast.makeText(view.getContext(), "Enter between: " + minExp + ", " + maxExp, Toast.LENGTH_SHORT).show();
+                }
+            } catch (Exception e) {
+                Toast.makeText(view.getContext(), "Enter an integer", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        findViewById(R.id.set_fps).setOnClickListener(view -> {
+            try {
+                int maxFps = Integer.parseInt(((EditText) findViewById(R.id.max_fps)).getText().toString());
+                int minFps = Integer.parseInt(((EditText) findViewById(R.id.min_fps)).getText().toString());
+                List<int[]> supportedFpsRanges = mCameraParameters.getSupportedPreviewFpsRange();
+                boolean passed = false;
+                for (int i = 0; i < supportedFpsRanges.size(); i++) {
+                    int[] range = supportedFpsRanges.get(i);
+                    if (range[0] <= minFps && range[1] >= maxFps) {
+                        passed = true;
+                        break;
+                    }
+                }
+                if (passed) {
+                    mPreview.fpsRange = new int[]{minFps, maxFps};
+                    mPreview.surfaceChanged();
+                } else {
+                    String ranges = "";
+                    for (int[] i : supportedFpsRanges) {
+                        ranges += "[" + i[0] + ", " + i[1] + "]  ";
+                    }
+                    Toast.makeText(view.getContext(), "Supported fps ranges are: " + ranges, Toast.LENGTH_LONG).show();
+                }
+            } catch (Exception e) {
+                Toast.makeText(view.getContext(), "Enter integer", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        findViewById(R.id.set_is_cropping).setOnClickListener(view -> {
+
+        });
 
         Spinner frameSizeSpinner = findViewById(R.id.frame_size_spinner);
         Spinner sceneModeSpinner = findViewById(R.id.scene_mode_spinner);
@@ -119,33 +185,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startCamera() {
-        cameraWorker = new Thread(() -> {
-            /* first decode */
-            Bitmap b = BitmapFactory.decodeByteArray(byteImage, 0, byteImage.length);
-            /* changing rotation */
-            Matrix matrix = new Matrix();
-            matrix.postRotate(90);
-            Bitmap lastBm = Bitmap.createBitmap(b, 0, 0, b.getWidth(), b.getHeight(), matrix, true);
-
-            runOnUiThread(() -> iv.setImageBitmap(Bitmap.createScaledBitmap(lastBm, iv.getWidth(), iv.getHeight(), false)));
-
-            File pictureFile = getOutputMediaFile(MEDIA_TYPE_IMAGE);
-            if (pictureFile == null) {
-                Log.d(TAG, "Error creating media file, check storage permissions");
-                return;
-            }
-            try {
-                FileOutputStream fos = new FileOutputStream(pictureFile);
-                fos.write(byteImage);
-                fos.close();
-            } catch (FileNotFoundException e) {
-                Log.d(TAG, "File not found: " + e.getMessage());
-            } catch (IOException e) {
-                Log.d(TAG, "Error accessing file: " + e.getMessage());
-            }
-        });
         if (checkCameraHardware(this)) {
-            mCamera = getCameraInstance(this);
+            mCamera = getCameraInstance(this, devicePosition);
             if (mCamera != null) {
                 mCamera.setDisplayOrientation(90);
                 mPreview = new CameraPreview(this, mCamera);
@@ -165,7 +206,7 @@ public class MainActivity extends AppCompatActivity {
         public void onPictureTaken(byte[] data, Camera camera) {
             startCamera();
             byteImage = data;
-            cameraWorker.start();
+            new Thread(() -> cameraWorker()).start();
         }
     };
 
@@ -176,14 +217,46 @@ public class MainActivity extends AppCompatActivity {
     /**
      * A safe way to get an instance of the Camera object.
      */
-    public static Camera getCameraInstance(Context context) {
+    public static Camera getCameraInstance(Context context, int devicePosition) {
         Camera c = null;
         try {
-            c = Camera.open(); // attempt to get a Camera instance
+            c = Camera.open(devicePosition); // attempt to get a Camera instance
         } catch (Exception e) {
             // Camera is not available (in use or does not exist)
             Toast.makeText(context, "Cant start camera", Toast.LENGTH_SHORT).show();
         }
         return c; // returns null if camera is unavailable
+    }
+
+    private void cameraWorker() {
+        if (mCamera != null) {
+            /* first decode */
+            Bitmap b = BitmapFactory.decodeByteArray(byteImage, 0, byteImage.length);
+            /* changing rotation */
+            int degree = 90;
+            if (devicePosition == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+                degree = 270;
+            }
+            Matrix matrix = new Matrix();
+            matrix.postRotate(degree);
+            Bitmap lastBm = Bitmap.createBitmap(b, 0, 0, b.getWidth(), b.getHeight(), matrix, true);
+
+            runOnUiThread(() -> iv.setImageBitmap(Bitmap.createScaledBitmap(lastBm, iv.getWidth(), iv.getHeight(), false)));
+
+            File pictureFile = getOutputMediaFile(MEDIA_TYPE_IMAGE);
+            if (pictureFile != null) {
+                try {
+                    FileOutputStream fos = new FileOutputStream(pictureFile);
+                    fos.write(byteImage);
+                    fos.close();
+                } catch (FileNotFoundException e) {
+                    Log.d(TAG, "File not found: " + e.getMessage());
+                } catch (IOException e) {
+                    Log.d(TAG, "Error accessing file: " + e.getMessage());
+                }
+            } else {
+                Log.d(TAG, "Error creating media file, check storage permissions");
+            }
+        }
     }
 }

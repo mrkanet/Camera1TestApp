@@ -10,20 +10,23 @@ import android.view.SurfaceView;
 import java.io.IOException;
 import java.util.List;
 
-/**
- * A basic Camera preview class
- */
+@SuppressLint("ViewConstructor")
+@SuppressWarnings("deprecation")
 public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback {
-    private static String TAG = "CameraPreview";
+    private static final String TAG = "CameraPreview";
     private SurfaceHolder mHolder;
     private Camera mCamera;
     private List<Camera.Size> mSupportedPreviewSizes;
     private Camera.Size mPreviewSize;
 
     /* public attrs */
-    public boolean awb = false;
+    public boolean awbLock = false;
+    public boolean aeLock = false;
     public String sceneMode = "auto";
     public String frameSize = "normal";
+    public int exposureCompensation = 0;
+    public boolean setExposureCompensation = false;
+    public int[] fpsRange = {0,0};
 
     public CameraPreview(Context context, Camera camera) {
         super(context);
@@ -80,8 +83,11 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
         try {
             Camera.Parameters parameters = mCamera.getParameters();
             parameters.setPreviewSize(mPreviewSize.width, mPreviewSize.height);
-            parameters.setAutoWhiteBalanceLock(awb);
+            parameters.setAutoWhiteBalanceLock(awbLock);
             parameters.setSceneMode(sceneMode);
+            if (fpsRange[0] != 0 || fpsRange[1] != 0) {
+                parameters.setPreviewFpsRange(fpsRange[0], fpsRange[1]);
+            }
             mCamera.setParameters(parameters);
             mCamera.setPreviewDisplay(mHolder);
             mCamera.startPreview();
