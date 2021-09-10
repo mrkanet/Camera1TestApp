@@ -12,6 +12,7 @@ import android.hardware.Camera;
 import android.os.Bundle;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.util.TypedValue;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -24,6 +25,8 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -42,6 +45,7 @@ public class MainActivity extends AppCompatActivity {
     byte[] byteImage;
     int devicePosition = 0;
     static boolean isCropping = false;
+    int quality = 85;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -131,6 +135,22 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.set_is_cropping).setOnClickListener(view -> {
             isCropping = !isCropping;
             ((Button) view).setText(isCropping ? "Crop" : "Don't Crop");
+        });
+
+        findViewById(R.id.set_quality).setOnClickListener(view -> {
+            switch (quality) {
+                case 70:
+                    quality = 100;
+                    ((Button) view).setText("Q: High");
+                    break;
+                case 100:
+                    quality = 85;
+                    ((Button) view).setText("Q: Normal");
+                    break;
+                default:
+                    quality = 70;
+                    ((Button) view).setText("Q: Low");
+            }
         });
 
         Spinner frameSizeSpinner = findViewById(R.id.frame_size_spinner);
@@ -229,6 +249,7 @@ public class MainActivity extends AppCompatActivity {
         return c; // returns null if camera is unavailable
     }
 
+    @SuppressWarnings("SuspiciousNameCombination")
     private void cameraWorker() {
         if (mCamera != null) {
             /* first decode */
@@ -240,17 +261,25 @@ public class MainActivity extends AppCompatActivity {
             }
             Matrix matrix = new Matrix();
             matrix.postRotate(degree);
-            final Bitmap lastBm;
+            Bitmap croppedBitmap;
             if (isCropping) {
                 DisplayMetrics displayMetrics = new DisplayMetrics();
                 getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
-                int width = (int) (b.getHeight() * getMorePercent(mPreview.getWidth(), displayMetrics.widthPixels));
-                int height = (int) (b.getWidth() * getMorePercent(mPreview.getHeight(), displayMetrics.heightPixels));
-                lastBm = Bitmap.createBitmap(b, 0, 0, width, height, matrix, true);
+                TypedValue tv = new TypedValue();
+                int actionBarHeight = 0;
+                if (getTheme().resolveAttribute(android.R.attr.actionBarSize, tv, true)) {
+                    actionBarHeight = TypedValue.complexToDimensionPixelSize(tv.data, getResources().getDisplayMetrics());
+                }
+                int height = (int) (b.getHeight() * getMorePercent(mPreview.getWidth(), displayMetrics.widthPixels));
+                int width = (int) (b.getWidth() * getMorePercent(mPreview.getHeight(), displayMetrics.heightPixels));
+                croppedBitmap = Bitmap.createBitmap(b, actionBarHeight, b.getHeight() - width, height, width, matrix, true);
             } else {
-                lastBm = Bitmap.createBitmap(b, 0, 0, b.getWidth(), b.getHeight(), matrix, true);
+                croppedBitmap = Bitmap.createBitmap(b, 0, 0, b.getWidth(), b.getHeight(), matrix, true);
             }
-            runOnUiThread(() -> iv.setImageBitmap(Bitmap.createScaledBitmap(lastBm, iv.getWidth(), iv.getHeight(), false)));
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            croppedBitmap.compress(Bitmap.CompressFormat.JPEG, quality, out);
+            Bitmap finalBitmap = BitmapFactory.decodeStream(new ByteArrayInputStream(out.toByteArray()));
+            runOnUiThread(() -> iv.setImageBitmap(Bitmap.createScaledBitmap(finalBitmap, iv.getWidth(), iv.getHeight(), false)));
 
             File pictureFile = getOutputMediaFile(MEDIA_TYPE_IMAGE);
             if (pictureFile != null) {
